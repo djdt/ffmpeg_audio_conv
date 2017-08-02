@@ -46,7 +46,8 @@ def display_progress(count, total, elapsed_time):
     filled = int(round(bar_len * count) / float(total))
     bar = '[' + '#' * filled + ' ' * (bar_len - filled) + ']'
 
-    timeleft = 0 if count == 0 else elapsed_time / total * (total - count)
+    timeleft = 0 if count == 0 else (
+            elapsed_time / float(total)) * (total - count)
     print('{} {:>6.1%} {}'.format(
             bar, count / float(total),
             time.strftime('%H:%M:%S', time.gmtime(timeleft))))
