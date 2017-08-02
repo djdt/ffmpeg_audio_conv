@@ -24,21 +24,26 @@ def find_all_files(base_dir, exts):
     return matches
 
 
-def progress_display(count, total, msg):
+def progress_display(count, total, msg, threads):
     bar_len = 32
     filled_len = int(round(bar_len * count) / float(total))
 
     percent = count / float(total)
     bar = '#' * filled_len + ' ' * (bar_len - filled_len)
 
-    line1 = str(msg)
     line2 = '[{}] {:>6.1%}'.format(bar, percent)
 
+    # Print one line per thread
+    for m in msg:
+        print('\033[K', end='')
+        print('Current file:', m)
+    for i in range(threads - len(msg)):
+        print('\033[K', end='')
+        print('Finished.')
+    # Print progress bar
     print('\033[K', end='')
-    print(line1)
-    print(line2, end='')
-    print('\b' * len(line2), end='')
-    print('\033[F', end='')
+    print(line2)
+    print('\033[F' * (threads + 1), end='')
 
 
 def get_output_file_path(in_path, in_base, out_base, new_ext):
@@ -96,11 +101,10 @@ def main():
 
     procs = []
     prog_total = len(source_files)
-    prog_complete = 0
-    prog_skipped = 0
+    prog_complete, prog_error, prog_skipped = 0, 0, 0
     update_progress = True
 
-    while prog_complete + prog_skipped < prog_total:
+    while prog_complete + prog_error + prog_skipped < prog_total:
         # Check current processes
         for proc, fn in procs:
             ret = proc.poll()
@@ -110,8 +114,10 @@ def main():
                     print("Logged error for file:", fn)
                     for line in proc.stderr:
                         logger.info(line)
+                    prog_error += 1
+                else:
+                    prog_complete += 1
                 procs.remove((proc, fn))
-                prog_complete += 1
                 update_progress = True
                 break
 
@@ -121,7 +127,14 @@ def main():
             out_file = get_output_file_path(
                     in_file, source_path, dest_path, args['outformat'])
             # If the file already exists, skip it
-            if not os.path.exists(out_file):
+            if os.path.exists(out_file):
+                prog_skipped += 1
+            else:
+                # Make new dir if needed
+                dir_name = os.path.dirname(out_file)
+                if not os.path.exists(dir_name):
+                    os.makedirs(dir_name, exist_ok=True)
+                    print('Creating dir:', dir_name)
                 # Build ffmpeg cmd
                 cmd = ['ffmpeg', '-i', in_file]
                 if args['quality'] is not None:
@@ -133,21 +146,22 @@ def main():
                 p = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
                                      stderr=subprocess.PIPE)
                 procs.append((p, os.path.basename(out_file)))
-            else:
-                prog_skipped += 1
             update_progress = True
 
         # Update the progress
         if update_progress:
-            progress_display(prog_complete + prog_skipped,
-                             prog_total, [x[1] for x in procs])
+            progress_display(prog_complete + prog_error + prog_skipped,
+                             prog_total, [x[1] for x in procs],
+                             args['threads'])
             update_progress = False
         time.sleep(0.01)
 
     # Display end msg
     finish = time.time()
-    progress_display(1, 1, [])
-    print('\n')
+    progress_display(1, 1, [], args['threads'])
+    print('\n' * args['threads'])
+    if prog_error > 0:
+        print('{} errors.'.format(prog_error))
     if prog_skipped > 0:
         print('{} files skipped.'.format(prog_skipped))
     if prog_complete > 0:
