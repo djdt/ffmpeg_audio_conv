@@ -86,9 +86,10 @@ def main():
     procs = []
     prog_total = len(source_files)
     prog_complete = 0
+    prog_skipped = 0
     update_progress = True
 
-    while prog_complete < prog_total:
+    while prog_complete + prog_skipped < prog_total:
         # Check current processes
         for proc, fn in procs:
             ret = proc.poll()
@@ -125,12 +126,13 @@ def main():
                                      stderr=subprocess.PIPE)
                 procs.append((p, os.path.basename(out_file)))
             else:
-                prog_complete += 1
+                prog_skipped += 1
             update_progress = True
 
         # Update the progress
         if update_progress:
-            progress_display(prog_complete, prog_total, [x[1] for x in procs])
+            progress_display(prog_complete + prog_skipped,
+                             prog_total, [x[1] for x in procs])
             update_progress = False
         time.sleep(0.01)
 
@@ -138,8 +140,11 @@ def main():
     finish = time.time()
     progress_display(1, 1, [])
     print('\n')
-    print('{} files converted in {:.2f} seconds.'.format(
-        prog_total, finish - start))
+    if prog_skipped > 0:
+        print('{} files skipped.'.format(prog_skipped))
+    if prog_complete > 0:
+        print('{} files converted in {:.2f} seconds.'.format(
+            prog_complete, finish - start))
 
 
 if __name__ == "__main__":
