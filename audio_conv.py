@@ -23,7 +23,7 @@ def find_all_files(base_dir, exts):
     return matches
 
 
-def progress_display(count, total, msg, end='\r'):
+def progress_display(count, total, msg):
     bar_len = 32
     filled_len = int(round(bar_len * count) / float(total))
 
