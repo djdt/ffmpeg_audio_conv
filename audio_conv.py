@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os
 import subprocess
 import sys
@@ -73,6 +74,13 @@ def main():
         print('Cannot define quality AND bitrate, use one.')
         sys.exit(1)
 
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    handler = logging.FileHandler('audio_conv.log', 'w')
+    handler.setFormatter(logging.Formatter('%(asctime)s %(message)s'))
+    logger.addHandler(handler)
+    logger.propagate = False
+
     source_path = os.path.abspath(os.path.expanduser(args['indir']))
     dest_path = os.path.abspath(os.path.expanduser(args['outdir']))
 
@@ -82,6 +90,9 @@ def main():
         source_files = find_all_files(source_path, args['informat'])
     else:
         source_files = find_files(source_path, args['informat'])
+
+    # Sort reverse to allow for pop
+    source_files.sort(reverse=True)
 
     procs = []
     prog_total = len(source_files)
@@ -96,12 +107,9 @@ def main():
             if ret is not None:
                 # If error, print and exit
                 if ret > 0:
-                    print("ffmpeg error: ")
+                    print("Logged error for file:", fn)
                     for line in proc.stderr:
-                        print(line)
-                    for p in procs:
-                        p.kill
-                    sys.exit(1)
+                        logger.info(line)
                 procs.remove((proc, fn))
                 prog_complete += 1
                 update_progress = True
@@ -145,6 +153,11 @@ def main():
     if prog_complete > 0:
         print('{} files converted in {:.2f} seconds.'.format(
             prog_complete, finish - start))
+
+    # Remove empty logs
+    logging.shutdown()
+    if os.stat('audio_conv.log').st_size == 0:
+        os.remove('audio_conv.log')
 
 
 if __name__ == "__main__":
