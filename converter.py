@@ -10,7 +10,8 @@ class ConverterProcess:
     def __init__(self, cmd, name):
         self.name = name
         self.process = subprocess.Popen(
-            cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE)
 
     def kill(self):
         self.process.send_signal(signal.SIGINT)
