@@ -11,16 +11,20 @@ from util.converter import Converter
 from util.cleankiller import CleanKiller
 
 
-def display_progress(count, total, elapsed_time):
+def time_remaining(completed, remaining, elapsed_time):
+    if completed == 0:
+        return 0
+    return (remaining * (elapsed_time / float(completed)))
+
+
+def display_progress(count, total, remaining_time):
     bar_len = 32
     filled = int(round(bar_len * count) / float(total))
     bar = '[' + '#' * filled + ' ' * (bar_len - filled) + ']'
 
-    timeleft = 0 if count == 0 else (
-            (total - count) * (elapsed_time / float(count)))
-    print('{} {:>6.1%} {}'.format(
+    print('{} {:>6.1%} Time left: {}'.format(
             bar, count / float(total),
-            time.strftime('%H:%M:%S', time.gmtime(timeleft))))
+            time.strftime('%H:%M:%S', time.gmtime(remaining_time))))
     print(u'\u001b[1A', end='')
 
 
@@ -79,6 +83,7 @@ def main(args):
 
     start_time = time.time()
     elapsed_time = 0
+    update_progress = True
 
     while converter.num_converted() < num_files:
         # Check current processes
@@ -94,12 +99,18 @@ def main(args):
             outfile = os.path.splitext(outfile)[0] + (
                     os.extsep + args['outformat'])
             converter.add_process(infile, outfile, pretend=args['pretend'])
+            update_progress = True
 
         # Update the progress
-        elapsed_time = time.time() - start_time
-        display_progress(converter.num_converted(), num_files, elapsed_time)
+        if update_progress:
+            files_left = num_files - converter.num_converted()
+            time_left = time_remaining(converter.completed, files_left,
+                                       time.time() - start_time)
+            display_progress(converter.num_converted(), num_files, time_left)
+            update_progress = False
         # Sleep only if really waiting
-        time.sleep(0.01)
+        elif not args['pretend']:
+            time.sleep(0.05)
 
         if killer.kill_now:
             converter.kill_all()
@@ -110,10 +121,13 @@ def main(args):
     if args['copyother']:
         for f in other_files:
             new_f = fileops.convert_path(f, args['indir'], args['outdir'])
-            print('Copying:', f)
-            if not args['pretend']:
-                shutil.copy2(f, new_f)
-            copied += 1
+            if os.path.exists(new_f):
+                print('Skipping other:', f)
+            else:
+                print('Copying other:', f)
+                if not args['pretend']:
+                    shutil.copy2(f, new_f)
+                copied += 1
 
     # Display end msg
     print('Processed {} files in {:.2f} seconds.'.format(
