@@ -2,43 +2,12 @@
 import argparse
 import logging
 import os
-import signal
 import sys
 import time
 
-from converter import Converter
-
-
-class CleanupKiller:
-    kill_now = False
-
-    def __init__(self):
-        signal.signal(signal.SIGINT, self.exit)
-        signal.signal(signal.SIGTERM, self.exit)
-
-    def exit(self, signum, frame):
-        self.kill_now = True
-
-
-def find_files(base_dir, exts, recurse=False):
-    matches = []
-    if recurse:
-        for root, dirs, files in os.walk(base_dir):
-            for f in files:
-                if os.path.splitext(f)[1][1:] in exts:
-                    matches.append(os.path.join(root, f))
-    else:
-        for files in os.listdir(base_dir):
-            f = os.path.join(base_dir, files)
-            if os.path.isfile(f) and os.path.splitext(f)[1][1:] in exts:
-                    matches.append(f)
-    return matches
-
-
-def get_output_file_path(in_path, in_base, out_base, new_ext):
-    path = os.path.relpath(in_path, in_base)
-    path = os.path.splitext(path)[0] + os.extsep + new_ext
-    return os.path.join(out_base, path)
+from util import fileops
+from util.converter import Converter
+from util.cleankiller import CleanKiller
 
 
 def display_progress(count, total, elapsed_time):
@@ -94,49 +63,29 @@ def main():
         options = []
 
     logger = setup_logger()
-    killer = CleanupKiller()
+    killer = CleanKiller()
 
-    source_path = os.path.abspath(os.path.expanduser(args['indir']))
-    dest_path = os.path.abspath(os.path.expanduser(args['outdir']))
-
-    # Gather input files
-    source_files = find_files(source_path,
-                              args['informat'], args['recurse'])
-
-    # Sort reverse to allow for pop
-    source_files.sort(reverse=True)
+    src_files = fileops.gather_files(args['indir'],
+                                     args['informat'], args['recurse'])
 
     converter = Converter(options, args['threads'])
-    num_files = len(source_files)
+    num_files = len(src_files)
     skipped = 0
 
     start_time = time.time()
     elapsed_time = 0
 
-    while converter.num_converted() + skipped < num_files:
+    while converter.num_converted() < num_files:
         # Check current processes
         if converter.check_processes() > 0:
             converter.log_errors(logger)
             # update_progress = True
 
-        if converter.can_add_process() and len(source_files) > 0:
-            infile = source_files.pop()
-            # Remove source_path, change ext, prepend dest_path
-            outfile = get_output_file_path(
-                    infile, source_path, dest_path, args['outformat'])
-            # If the file already exists, skip it
-            if os.path.exists(outfile):
-                print('Skipping:', outfile)
-                skipped += 1
-            else:
-                # Make new dir if needed
-                dir_name = os.path.dirname(outfile)
-                if not os.path.exists(dir_name):
-                    os.makedirs(dir_name, exist_ok=True)
-                    print('Creating dir:', dir_name)
-                # Add new process to processes, store filename for print
-                print('Converting:', infile)
-                converter.new_process(infile, outfile)
+        if converter.can_add_process() and len(src_files) > 0:
+            infile = src_files.pop()
+            outfile = fileops.convert_path(
+                infile, args['indir'], args['outdir'], args['outformat'])
+            converter.add_process(infile, outfile)
 
         # Update the progress
         elapsed_time = time.time() - start_time
@@ -153,7 +102,7 @@ def main():
     print('Processed {} files in {:.2f} seconds.'.format(
         converter.num_converted(), elapsed_time))
     print('{} errors, {} skipped, {} converted.'.format(
-        converter.failed, skipped, converter.completed))
+        converter.failed, converter.skipped, converter.completed))
 
     # Remove empty logs
     logging.shutdown()

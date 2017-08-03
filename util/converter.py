@@ -4,6 +4,8 @@ import os
 import subprocess
 import signal
 
+from util import fileops
+
 
 class ConverterProcess:
 
@@ -34,6 +36,7 @@ class Converter:
         self.processes = []
         self.completed = 0
         self.failed = 0
+        self.skipped = 0
 
     def check_processes(self):
         ret = 0
@@ -49,12 +52,25 @@ class Converter:
                 self.processes.remove(proc)
         return ret
 
-    def new_process(self, inpath, outpath):
-        cmd = ['ffmpeg', '-i', inpath]
-        cmd.extend(self.options)
-        cmd.append(outpath)
-        self.processes.append(
-            ConverterProcess(cmd, os.path.basename(inpath)))
+    def add_process(self, inpath, outpath, print_actions=True):
+        if os.path.exists(outpath):
+            if print_actions:
+                print('Skipping:', outpath)
+            self.skipped += 1
+        else:
+            # Make new dir if needed
+            if fileops.create_dirs_if_not_exists(
+                    os.path.dirname(outpath)):
+                if print_actions:
+                    print('Creating dir:', os.path.dirname(outpath))
+            # Add new process to processes, store filename for print
+            if print_actions:
+                print('Converting:', inpath)
+            cmd = ['ffmpeg', '-i', inpath]
+            cmd.extend(self.options)
+            cmd.append(outpath)
+            self.processes.append(
+                ConverterProcess(cmd, os.path.basename(inpath)))
 
     def log_errors(self, logger):
         for proc in self.failed_processes:
@@ -76,4 +92,4 @@ class Converter:
         return [p.name for p in self.processes]
 
     def num_converted(self):
-        return self.completed + self.failed
+        return self.completed + self.failed + self.skipped
