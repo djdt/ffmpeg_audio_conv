@@ -25,12 +25,9 @@ def gather_files(dir, exts=None, recurse=False, ignore_other=False):
                 elif not ignore_other:
                     other_files.append(f)
 
-    matches.sort(reverse=True)
-    other_files.sort(reverse=True)
     return matches, other_files
 
 
-def convert_path(file, indir, outdir, ext):
+def convert_path(file, indir, outdir):
     path = os.path.relpath(file, expand_path(indir))
-    path = os.path.splitext(path)[0] + os.extsep + ext
     return os.path.join(expand_path(outdir), path)
