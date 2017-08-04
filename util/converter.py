@@ -7,8 +7,8 @@ import signal
 
 class ConverterProcess:
 
-    def __init__(self, cmd, file):
-        self.file = file
+    def __init__(self, cmd, inf, outf):
+        self.inf, self.outf = inf, outf
         self.process = subprocess.Popen(
             cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE)
@@ -17,8 +17,8 @@ class ConverterProcess:
         self.process.send_signal(signal.SIGINT)
         self.process.wait()
         # Remove uncompleted file
-        if os.path.exists(self.file):
-            os.remove(self.file)
+        if os.path.exists(self.outf):
+            os.remove(self.outf)
 
     def poll(self):
         return self.process.poll()
@@ -38,6 +38,7 @@ class Converter:
         self.failed_processes = []
         self.completed = 0
         self.failed = 0
+        self.size_conv = 0
 
     def check_processes(self):
         ret = 0
@@ -50,6 +51,7 @@ class Converter:
                     ret += 1
                 else:
                     self.completed += 1
+                    self.size_conv += os.stat(proc.inf).st_size
                 self.processes.remove(proc)
         return ret
 
@@ -71,7 +73,7 @@ class Converter:
             cmd = ['ffmpeg', '-i', inpath]
             cmd.extend(self.options)
             cmd.append(outpath)
-            self.processes.append(ConverterProcess(cmd, outpath))
+            self.processes.append(ConverterProcess(cmd, inpath, outpath))
 
     def log_errors(self, logger):
         for proc in self.failed_processes:

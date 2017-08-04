@@ -47,7 +47,7 @@ def parse_args(args):
                         help='File types to convert.')
     parser.add_argument('-p', '--pretend', action='store_true',
                         help='Perform no actions.')
-    parser.add_argument('-o', '--outext', type=str,
+    parser.add_argument('-o', '--outext', type=str, required=True,
                         help='Target file type for conversion.')
     parser.add_argument('-q', '--quality', type=str,
                         help='Quality to pass to ffmpeg.')
@@ -55,6 +55,8 @@ def parse_args(args):
     #                     help='Recurse the input directory.')
     parser.add_argument('-t', '--threads', type=int, default=4,
                         help='Maximum number of threads used.')
+    parser.add_argument('-v', '--verbose', action='store_true',
+                        help='Increase output.')
     return vars(parser.parse_args(args))
 
 
@@ -84,19 +86,20 @@ def main(args):
     start_time = time.time()
 
     # Get files then filter existing
-    in_files = fileops.search_exts(args['indir'], args['inexts'])
-    skipped = 0
-    for f in in_files:
-        if os.path.exists(
-                fileops.convert_path(f, args['indir'], args['outdir'])):
-            print('Skipping:', f)
+    in_files, skipped = [], 0
+    for f in fileops.search_exts(args['indir'], args['inexts']):
+        t = fileops.convert_path(f, args['indir'], args['outdir'])
+        t = os.path.splitext(t)[0] + os.extsep + args['outext']
+        if os.path.exists(t):
+            if args['verbose']:
+                print('Skipping:', f)
             skipped += 1
-            in_files.remove(f)
+        else:
+            in_files.append(f)
     in_files.sort(reverse=True)  # Optimise for pop later
 
     num_files = len(in_files)
     size_files = fileops.total_size(in_files)
-    size_conv = 0
     update_progress = True
 
     while converter.num_converted() < num_files:
@@ -108,7 +111,7 @@ def main(args):
 
         if converter.can_add_process() and len(in_files) > 0:
             inf = in_files.pop()
-            size_conv += os.stat(inf).st_size
+
             outf = fileops.convert_path(inf, args['indir'], args['outdir'])
             outf = os.path.splitext(outf)[0] + (os.extsep + args['outext'])
             converter.add_process(inf, outf, pretend=args['pretend'])
@@ -116,8 +119,9 @@ def main(args):
 
         # Update the progress
         if update_progress:
-            time_left = time_remaining(size_conv, size_files - size_conv,
-                                       time.time() - start_time)
+            time_left = time_remaining(
+                    converter.size_conv, size_files - converter.size_conv,
+                    time.time() - start_time)
             display_progress(converter.num_converted(), num_files, time_left)
             update_progress = False
         # Sleep only if really waiting
@@ -135,7 +139,8 @@ def main(args):
         for f in copy_files:
             new_f = fileops.convert_path(f, args['indir'], args['outdir'])
             if os.path.exists(new_f):
-                print('Skipping other:', f)
+                if args['verbose']:
+                    print('Skipping other:', f)
             else:
                 print('Copying other:', f)
                 if not args['pretend']:
@@ -160,9 +165,6 @@ def main(args):
 
 if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
-    if args['outext'] is None:
-        print('Please specify an output format.')
-        exit(1)
     if args['quality'] is not None and args['bitrate'] is not None:
         print('Only one of quality and bitrate may be specified.')
         exit(1)
