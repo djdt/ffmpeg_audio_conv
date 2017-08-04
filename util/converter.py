@@ -38,7 +38,6 @@ class Converter:
         self.failed_processes = []
         self.completed = 0
         self.failed = 0
-        self.skipped = 0
 
     def check_processes(self):
         ret = 0
@@ -56,28 +55,23 @@ class Converter:
 
     def add_process(self, inpath, outpath,
                     print_actions=True, pretend=False):
-        if os.path.exists(outpath):
+        # Make new dir if needed
+        if not os.path.exists(os.path.dirname(outpath)):
             if print_actions:
-                print('Skipping:', outpath)
-            self.skipped += 1
-        else:
-            # Make new dir if needed
-            if not os.path.exists(os.path.dirname(outpath)):
-                if print_actions:
-                    print('Creating dir:', os.path.dirname(outpath))
-                if not pretend:
-                    os.makedirs(os.path.dirname(outpath))
+                print('Creating dir:', os.path.dirname(outpath))
+            if not pretend:
+                os.makedirs(os.path.dirname(outpath))
 
-            # Add new process to processes, store filename for print
-            if print_actions:
-                print('Converting:', inpath)
-            if pretend:
-                self.completed += 1
-            else:
-                cmd = ['ffmpeg', '-i', inpath]
-                cmd.extend(self.options)
-                cmd.append(outpath)
-                self.processes.append(ConverterProcess(cmd, outpath))
+        # Add new process to processes, store filename for print
+        if print_actions:
+            print('Converting:', inpath)
+        if pretend:
+            self.completed += 1
+        else:
+            cmd = ['ffmpeg', '-i', inpath]
+            cmd.extend(self.options)
+            cmd.append(outpath)
+            self.processes.append(ConverterProcess(cmd, outpath))
 
     def log_errors(self, logger):
         for proc in self.failed_processes:
@@ -99,4 +93,4 @@ class Converter:
         return [p.name for p in self.processes]
 
     def num_converted(self):
-        return self.completed + self.failed + self.skipped
+        return self.completed + self.failed

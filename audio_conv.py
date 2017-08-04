@@ -30,23 +30,29 @@ def display_progress(count, total, remaining_time):
 
 def parse_args(args):
     parser = argparse.ArgumentParser(
-        description='Converts audio files using ffmpeg.')
+            description='Converts audio files using ffmpeg,'
+                        ' preserves dir structure.',
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('indir', help='Input directory.')
     parser.add_argument('outdir', help='Output directory.')
     parser.add_argument('-b', '--bitrate', type=str,
                         help='Target bitrate, e.g. 320k.')
-    parser.add_argument('-c', '--copyother', action='store_true',
+    parser.add_argument('-c', '--copyexts', type=str, nargs='+',
+                        default=['jpg', 'jpeg', 'png', 'gif', 'log', 'cue'],
                         help='Copy other files (e.g. images) to new dir.')
-    parser.add_argument('-i', '--informat', type=str, nargs='*',
-                        help='Ext(s) to convert, \'*\' for all.')
+    parser.add_argument('-C', '--nocopyexts', action='store_true',
+                        help='Prevent copying of other files.')
+    parser.add_argument('-i', '--inexts', type=str, nargs='+',
+                        default=['flac', 'alac', 'wav'],
+                        help='File types to convert.')
     parser.add_argument('-p', '--pretend', action='store_true',
                         help='Perform no actions.')
-    parser.add_argument('-o', '--outformat', type=str,
-                        help='Target format (use ext.).')
+    parser.add_argument('-o', '--outext', type=str,
+                        help='Target file type for conversion.')
     parser.add_argument('-q', '--quality', type=str,
                         help='Quality to pass to ffmpeg.')
-    parser.add_argument('-r', '--recurse', action='store_true',
-                        help='Recurse the input directory.')
+    # parser.add_argument('-r', '--recurse', action='store_true',
+    #                     help='Recurse the input directory.')
     parser.add_argument('-t', '--threads', type=int, default=4,
                         help='Maximum number of threads used.')
     return vars(parser.parse_args(args))
@@ -70,19 +76,27 @@ def main(args):
     else:
         options = []
 
+    # Init logger and killer
     logger = setup_logger()
     killer = CleanKiller()
-
-    src_files, other_files = fileops.gather_files(
-            args['indir'], args['informat'], args['recurse'], False)
-    # For pop later
-    src_files.sort(reverse=True)
-
     converter = Converter(options, args['threads'])
-    num_files = len(src_files)
 
     start_time = time.time()
-    elapsed_time = 0
+
+    # Get files then filter existing
+    in_files = fileops.search_exts(args['indir'], args['inexts'])
+    skipped = 0
+    for f in in_files:
+        if os.path.exists(
+                fileops.convert_path(f, args['indir'], args['outdir'])):
+            print('Skipping:', f)
+            skipped += 1
+            in_files.remove(f)
+    in_files.sort(reverse=True)  # Optimise for pop later
+
+    num_files = len(in_files)
+    size_files = fileops.total_size(in_files)
+    size_conv = 0
     update_progress = True
 
     while converter.num_converted() < num_files:
@@ -92,19 +106,17 @@ def main(args):
             converter.log_errors(logger)
             # update_progress = True
 
-        if converter.can_add_process() and len(src_files) > 0:
-            infile = src_files.pop()
-            outfile = fileops.convert_path(
-                infile, args['indir'], args['outdir'])
-            outfile = os.path.splitext(outfile)[0] + (
-                    os.extsep + args['outformat'])
-            converter.add_process(infile, outfile, pretend=args['pretend'])
+        if converter.can_add_process() and len(in_files) > 0:
+            inf = in_files.pop()
+            size_conv += os.stat(inf).st_size
+            outf = fileops.convert_path(inf, args['indir'], args['outdir'])
+            outf = os.path.splitext(outf)[0] + (os.extsep + args['outext'])
+            converter.add_process(inf, outf, pretend=args['pretend'])
             update_progress = True
 
         # Update the progress
         if update_progress:
-            files_left = num_files - converter.num_converted()
-            time_left = time_remaining(converter.completed, files_left,
+            time_left = time_remaining(size_conv, size_files - size_conv,
                                        time.time() - start_time)
             display_progress(converter.num_converted(), num_files, time_left)
             update_progress = False
@@ -118,8 +130,9 @@ def main(args):
             exit(1)
 
     copied = 0
-    if args['copyother']:
-        for f in other_files:
+    if not args['nocopyexts']:
+        copy_files = fileops.search_exts(args['indir'], args['copyexts'])
+        for f in copy_files:
             new_f = fileops.convert_path(f, args['indir'], args['outdir'])
             if os.path.exists(new_f):
                 print('Skipping other:', f)
@@ -130,11 +143,13 @@ def main(args):
                 copied += 1
 
     # Display end msg
-    print('Processed {} files in {:.2f} seconds.'.format(
-        converter.num_converted(), elapsed_time))
+    print('Processed {} dirs, {} files in {:.2f} seconds.'.format(
+        fileops.count_dirs(args['indir']),
+        converter.num_converted() + skipped,
+        time.time() - start_time))
     print('{} errors, {} skipped, {} converted.'.format(
-        converter.failed, converter.skipped, converter.completed))
-    if args['copyother']:
+        converter.failed, skipped, converter.completed))
+    if args['copyexts']:
         print('{} other files copied.'.format(copied))
 
     # Remove empty logs
@@ -145,8 +160,8 @@ def main(args):
 
 if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
-    if args['informat'] is None or args['outformat'] is None:
-        print('Please specify an input and output format.')
+    if args['outext'] is None:
+        print('Please specify an output format.')
         exit(1)
     if args['quality'] is not None and args['bitrate'] is not None:
         print('Only one of quality and bitrate may be specified.')
