@@ -72,9 +72,9 @@ def setup_logger():
 
 def main(args):
     if args['quality'] is not None:
-        options = ['-q', args['quality']]
+        options = ['-q:a', args['quality']]
     elif args['bitrate'] is not None:
-        options = ['-b', args['bitrate']]
+        options = ['-b:a', args['bitrate']]
     else:
         options = []
 

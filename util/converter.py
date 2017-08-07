@@ -70,7 +70,7 @@ class Converter:
         if pretend:
             self.completed += 1
         else:
-            cmd = ['ffmpeg', '-i', inpath]
+            cmd = ['ffmpeg', '-i', inpath, '-vn']
             cmd.extend(self.options)
             cmd.append(outpath)
             self.processes.append(ConverterProcess(cmd, inpath, outpath))
