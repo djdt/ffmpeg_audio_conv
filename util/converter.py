@@ -18,6 +18,7 @@ class ConverterProcess:
         self.process.wait()
         # Remove uncompleted file
         if os.path.exists(self.outf):
+            print('Removing:', self.outf)
             os.remove(self.outf)
 
     def poll(self):
