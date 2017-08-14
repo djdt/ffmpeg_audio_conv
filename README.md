@@ -1,6 +1,6 @@
 # ffmpeg_audio_conv
 
-Multi thread audio converter script using ffmpeg.
+Multithread audio converter script using ffmpeg.
 
 Usage:
 ```
