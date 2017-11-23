@@ -9,6 +9,7 @@ import time
 from util import fileops
 from util.converter import Converter
 from util.cleankiller import CleanKiller
+from util.updateinfo import compare_tags, replace_tags
 
 
 def time_remaining(completed, remaining, elapsed_time):
@@ -45,16 +46,16 @@ def parse_args(args):
     parser.add_argument('-i', '--inexts', type=str, nargs='+',
                         default=['flac', 'alac', 'wav'],
                         help='File types to convert.')
-    parser.add_argument('-p', '--pretend', action='store_true',
-                        help='Perform no actions.')
     parser.add_argument('-o', '--outext', type=str, required=True,
                         help='Target file type for conversion.')
+    parser.add_argument('-p', '--pretend', action='store_true',
+                        help='Perform no actions.')
     parser.add_argument('-q', '--quality', type=str,
                         help='Quality to pass to ffmpeg.')
-    # parser.add_argument('-r', '--recurse', action='store_true',
-    #                     help='Recurse the input directory.')
     parser.add_argument('-t', '--threads', type=int, default=4,
                         help='Maximum number of threads used.')
+    parser.add_argument('-u', '--updatetags', action='store_true',
+                        help='Update the tags of existing files.')
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='Increase output.')
     return vars(parser.parse_args(args))
@@ -91,6 +92,13 @@ def main(args):
         t = fileops.convert_path(f, args['indir'], args['outdir'])
         t = os.path.splitext(t)[0] + os.extsep + args['outext']
         if os.path.exists(t):
+            if args['updatetags']:
+                if not compare_tags(f, t):
+                    if not args['pretend']:
+                        replace_tags(f, t)
+                    print('Updating tag:', t)
+                elif args['verbose']:
+                    print('Skipping tag:', t)
             if args['verbose']:
                 print('Skipping:', f)
             skipped += 1
