@@ -92,11 +92,15 @@ def main(args):
         t = fileops.convert_path(f, args['indir'], args['outdir'])
         t = os.path.splitext(t)[0] + os.extsep + args['outext']
         if os.path.exists(t):
+            # Update tags if required
             if args['updatetags']:
-                if not compare_tags(f, t):
+                diff_tags = compare_tags(f, t)
+                if diff_tags != []:
                     if not args['pretend']:
-                        replace_tags(f, t)
-                    print('Updating tag:', t)
+                        replace_tags(f, t, diff_tags)
+                    print('Updating tags:', t)
+                    if args['verbose']:
+                        print('\tTags:', diff_tags)
                 elif args['verbose']:
                     print('Skipping tag:', t)
             if args['verbose']:
