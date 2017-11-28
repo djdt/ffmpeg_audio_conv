@@ -62,12 +62,14 @@ def parse_args(args):
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='Increase output.')
 
+    args = parser.parse_args(args)
+
     if not os.path.exists(args.indir):
         parser.error("Input directory does not exist.")
     if args.bitrate is not None and args.quality is not None:
         parser.error("Cannot set both bitrate and quality options.")
 
-    return vars(parser.parse_args(args))
+    return vars(args)
 
 
 def setup_logger():
@@ -184,17 +186,16 @@ def update_tags(infiles, args):
     """
     Updates tags interactively.
     """
-    replace_tags, ignore_tags = [], []
+
+    updater = TagUpdater()
+
     for source in infiles:
         dest = fileops.convert_path(source, args['indir'], args['outdir'])
         dest = os.path.splitext(dest)[0] + os.extsep + args['outext']
 
-        tags = compare_tags(source, dest)
+        updater.interactive_replace(source, dest)
 
-        # Update the replace and ignore tag arrays
-        for tag in tags:
-            if tag in replace_tags or tag in ignore_tags:
-                continue
+    return updater.replaced, updater.skipped
 
 
 if __name__ == "__main__":
@@ -203,13 +204,13 @@ if __name__ == "__main__":
     convfiles, skipfiles = gather_files(args)
     if not args['updateonly']:
         failed, completed, copied, time_taken = convert(convfiles, args)
-    if args['updatetags'] or args['updateonly']:
-        updated, skipped = update_tags(skipfiles, args)
+    # if args['updatetags'] or args['updateonly']:
+    #     updated, skipped = update_tags(skipfiles, args)
 
     # Display end msg
     print('Processed {} dirs, {} files in {:.2f} seconds.'.format(
         fileops.count_dirs(args['indir']),
-        failed + completed + len(skipfiles), time))
+        failed + completed + len(skipfiles), time_taken))
     print('{} errors, {} skipped, {} converted.'.format(
         failed, len(skipfiles), completed))
     if args['copyexts']:
