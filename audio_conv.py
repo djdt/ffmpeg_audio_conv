@@ -9,7 +9,7 @@ import time
 from util import fileops
 from util.converter import Converter
 from util.cleankiller import CleanKiller
-from util.updateinfo import compare_tags, replace_tags
+from util.updateinfo import TagUpdater
 
 
 def time_remaining(completed, remaining, elapsed_time):
@@ -53,11 +53,20 @@ def parse_args(args):
     parser.add_argument('-q', '--quality', type=str,
                         help='Quality to pass to ffmpeg.')
     parser.add_argument('-t', '--threads', type=int, default=4,
+                        choices=range(1, 16),
                         help='Maximum number of threads used.')
     parser.add_argument('-u', '--updatetags', action='store_true',
                         help='Update the tags of existing files.')
+    parser.add_argument('-U', '--updateonly', action='store_true',
+                        help='Only perform updating, not conversion..')
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='Increase output.')
+
+    if not os.path.exists(args.indir):
+        parser.error("Input directory does not exist.")
+    if args.bitrate is not None and args.quality is not None:
+        parser.error("Cannot set both bitrate and quality options.")
+
     return vars(parser.parse_args(args))
 
 
@@ -71,7 +80,34 @@ def setup_logger():
     return logger
 
 
-def main(args):
+def gather_files(args):
+    """
+    Searches directories for matching files.
+    Returns non-mathced (for conversion) and matched (for updating).
+    """
+
+    infiles, skipped = [], []
+    for f in fileops.search_exts(args['indir'], args['inexts']):
+        t = fileops.convert_path(f, args['indir'], args['outdir'])
+        t = os.path.splitext(t)[0] + os.extsep + args['outext']
+        if os.path.exists(t):
+            if args['verbose']:
+                print('Skipping:', f)
+            skipped.append(f)
+        else:
+            infiles.append(f)
+    infiles.sort(reverse=True)  # Optimise for pop later
+    skipped.sort(reverse=True)  # Optimise for pop later
+
+    return infiles, skipped
+
+
+def convert(infiles, args):
+    """
+    Takes input files for conversion.
+    Returns the number of failed, completed and copied files and the time.
+    """
+
     if args['quality'] is not None:
         options = ['-q:a', args['quality']]
     elif args['bitrate'] is not None:
@@ -86,32 +122,8 @@ def main(args):
 
     start_time = time.time()
 
-    # Get files then filter existing
-    in_files, skipped = [], 0
-    for f in fileops.search_exts(args['indir'], args['inexts']):
-        t = fileops.convert_path(f, args['indir'], args['outdir'])
-        t = os.path.splitext(t)[0] + os.extsep + args['outext']
-        if os.path.exists(t):
-            # Update tags if required
-            if args['updatetags']:
-                diff_tags = compare_tags(f, t)
-                if diff_tags != []:
-                    if not args['pretend']:
-                        replace_tags(f, t, diff_tags)
-                    print('Updating tags:', t)
-                    if args['verbose']:
-                        print('\tTags:', diff_tags)
-                elif args['verbose']:
-                    print('Skipping tag:', t)
-            if args['verbose']:
-                print('Skipping:', f)
-            skipped += 1
-        else:
-            in_files.append(f)
-    in_files.sort(reverse=True)  # Optimise for pop later
-
-    num_files = len(in_files)
-    size_files = fileops.total_size(in_files)
+    num_files = len(infiles)
+    size_files = fileops.total_size(infiles)
     update_progress = True
 
     while converter.num_converted() < num_files:
@@ -121,8 +133,8 @@ def main(args):
             converter.log_errors(logger)
             # update_progress = True
 
-        if converter.can_add_process() and len(in_files) > 0:
-            inf = in_files.pop()
+        if converter.can_add_process() and len(infiles) > 0:
+            inf = infiles.pop()
 
             outf = fileops.convert_path(inf, args['indir'], args['outdir'])
             outf = os.path.splitext(outf)[0] + (os.extsep + args['outext'])
@@ -159,31 +171,46 @@ def main(args):
                     shutil.copy2(f, new_f)
                 copied += 1
 
-    # Display end msg
-    print('Processed {} dirs, {} files in {:.2f} seconds.'.format(
-        fileops.count_dirs(args['indir']),
-        converter.num_converted() + skipped,
-        time.time() - start_time))
-    print('{} errors, {} skipped, {} converted.'.format(
-        converter.failed, skipped, converter.completed))
-    if args['copyexts']:
-        print('{} other files copied.'.format(copied))
-
     # Remove empty logs
     logging.shutdown()
     if os.stat('audio_conv.log').st_size == 0:
         os.remove('audio_conv.log')
 
+    return (converter.failed, converter.completed,
+            copied, time.time() - start_time)
+
+
+def update_tags(infiles, args):
+    """
+    Updates tags interactively.
+    """
+    replace_tags, ignore_tags = [], []
+    for source in infiles:
+        dest = fileops.convert_path(source, args['indir'], args['outdir'])
+        dest = os.path.splitext(dest)[0] + os.extsep + args['outext']
+
+        tags = compare_tags(source, dest)
+
+        # Update the replace and ignore tag arrays
+        for tag in tags:
+            if tag in replace_tags or tag in ignore_tags:
+                continue
+
 
 if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
-    if args['quality'] is not None and args['bitrate'] is not None:
-        print('Only one of quality and bitrate may be specified.')
-        exit(1)
-    if args['threads'] < 1:
-        print('Minimum threads allowed is one.')
-        exit(1)
-    if not os.path.exists(args['indir']):
-        print('Input directory does not exist.')
-        exit(1)
-    main(args)
+
+    convfiles, skipfiles = gather_files(args)
+    if not args['updateonly']:
+        failed, completed, copied, time_taken = convert(convfiles, args)
+    if args['updatetags'] or args['updateonly']:
+        updated, skipped = update_tags(skipfiles, args)
+
+    # Display end msg
+    print('Processed {} dirs, {} files in {:.2f} seconds.'.format(
+        fileops.count_dirs(args['indir']),
+        failed + completed + len(skipfiles), time))
+    print('{} errors, {} skipped, {} converted.'.format(
+        failed, len(skipfiles), completed))
+    if args['copyexts']:
+        print('{} other files copied.'.format(copied))
