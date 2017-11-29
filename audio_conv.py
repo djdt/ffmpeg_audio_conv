@@ -9,7 +9,6 @@ import time
 from util import fileops
 from util.converter import Converter
 from util.cleankiller import CleanKiller
-from util.updateinfo import TagUpdater
 
 
 def time_remaining(completed, remaining, elapsed_time):
@@ -203,7 +202,7 @@ def update_tags(infiles, args, logger, killer):
             print("Exiting...")
             exit(1)
 
-    return converter.completed
+    return converter.completed, time.time() - start_time
 
 
 def copy_other_files(args):
@@ -230,24 +229,28 @@ if __name__ == "__main__":
     killer = CleanKiller()
 
     convfiles, skipfiles = gather_files(args)
+    num_files = len(convfiles) + len(skipfiles)
+    convert_time, update_time = 0.0, 0.0
     if not args['updateonly']:
-        failed, completed, time_taken = convert(
-                convfiles, args, logger, killer)
+        failed, completed, convert_time = convert(convfiles, args,
+                                                  logger, killer)
         copied = copy_other_files(args)
         print("")
     if args['updatetags'] or args['updateonly']:
-        updated = update_tags(skipfiles, args, logger, killer)
+        updated, update_time = update_tags(skipfiles, args, logger, killer)
         print("")
 
     # Display end msg
+    print('Processed {} dirs, {} files in {:.2f} seconds.'.format(
+        fileops.count_dirs(args['indir']), num_files,
+        convert_time + update_time))
     if not args['updateonly']:
-        print('Processed {} dirs, {} files in {:.2f} seconds.'.format(
-            fileops.count_dirs(args['indir']),
-            failed + completed + len(skipfiles), time_taken))
-        print('{} errors, {} skipped, {} converted.'.format(
-            failed, len(skipfiles), completed))
+        print('Convert: {} errors, {} skipped, {} converted.'.format(
+            failed, num_files - (failed + completed), completed))
         if args['copyexts']:
-            print('{} other files copied.'.format(copied))
+            print('Copy: {} other files copied.'.format(copied))
+    if args['updatetags'] or args['updateonly']:
+        print('Update: Updated tags in {} files.'.format(updated, update_time))
 
     # Remove empty logs
     logging.shutdown()
