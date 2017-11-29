@@ -26,7 +26,7 @@ def display_progress(count, total, remaining_time):
     print('{} {:>6.1%} Time left: {}'.format(
             bar, count / float(total),
             time.strftime('%H:%M:%S', time.gmtime(remaining_time))))
-    print(u'\u001b[1A', end='')
+    print(u'\u001b[1A\u001b[2K', end='')
 
 
 def parse_args(args):
@@ -104,7 +104,7 @@ def gather_files(args):
     return infiles, skipped
 
 
-def convert(infiles, args):
+def convert(infiles, args, logger, killer):
     """
     Takes input files for conversion.
     Returns the number of failed, completed and copied files and the time.
@@ -117,9 +117,6 @@ def convert(infiles, args):
     else:
         options = []
 
-    # Init logger and killer
-    logger = setup_logger()
-    killer = CleanKiller()
     converter = Converter(options, args['threads'])
 
     start_time = time.time()
@@ -140,7 +137,7 @@ def convert(infiles, args):
 
             outf = fileops.convert_path(inf, args['indir'], args['outdir'])
             outf = os.path.splitext(outf)[0] + (os.extsep + args['outext'])
-            converter.add_process(inf, outf, pretend=args['pretend'])
+            converter.add_convert_process(inf, outf, pretend=args['pretend'])
             update_progress = True
 
         # Update the progress
@@ -159,6 +156,57 @@ def convert(infiles, args):
             print("Exiting...")
             exit(1)
 
+    return converter.failed, converter.completed, time.time() - start_time
+
+
+def update_tags(infiles, args, logger, killer):
+    """
+    Updates tags interactively.
+    """
+
+    converter = Converter(threads=args['threads'])
+
+    start_time = time.time()
+
+    num_files = len(infiles)
+    size_files = fileops.total_size(infiles)
+    update_progress = True
+
+    while converter.num_converted() < num_files:
+        # Check current processes
+        if converter.check_processes() > 0:
+            print('Logging errors...')
+            converter.log_errors(logger)
+            # update_progress = True
+
+        if converter.can_add_process() and len(infiles) > 0:
+            inf = infiles.pop()
+
+            outf = fileops.convert_path(inf, args['indir'], args['outdir'])
+            outf = os.path.splitext(outf)[0] + (os.extsep + args['outext'])
+            converter.add_update_process(inf, outf, pretend=args['pretend'])
+            update_progress = True
+
+        # Update the progress
+        if update_progress:
+            time_left = time_remaining(
+                    converter.size_conv, size_files - converter.size_conv,
+                    time.time() - start_time)
+            display_progress(converter.num_converted(), num_files, time_left)
+            update_progress = False
+        # Sleep only if really waiting
+        elif not args['pretend']:
+            time.sleep(0.05)
+
+        if killer.kill_now:
+            converter.kill_all()
+            print("Exiting...")
+            exit(1)
+
+    return converter.completed
+
+
+def copy_other_files(args):
     copied = 0
     if not args['nocopyexts']:
         copy_files = fileops.search_exts(args['indir'], args['copyexts'])
@@ -172,46 +220,36 @@ def convert(infiles, args):
                 if not args['pretend']:
                     shutil.copy2(f, new_f)
                 copied += 1
-
-    # Remove empty logs
-    logging.shutdown()
-    if os.stat('audio_conv.log').st_size == 0:
-        os.remove('audio_conv.log')
-
-    return (converter.failed, converter.completed,
-            copied, time.time() - start_time)
-
-
-def update_tags(infiles, args):
-    """
-    Updates tags interactively.
-    """
-
-    updater = TagUpdater()
-
-    for source in infiles:
-        dest = fileops.convert_path(source, args['indir'], args['outdir'])
-        dest = os.path.splitext(dest)[0] + os.extsep + args['outext']
-
-        updater.interactive_replace(source, dest)
-
-    return updater.replaced, updater.skipped
+    return copied
 
 
 if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
 
+    logger = setup_logger()
+    killer = CleanKiller()
+
     convfiles, skipfiles = gather_files(args)
     if not args['updateonly']:
-        failed, completed, copied, time_taken = convert(convfiles, args)
-    # if args['updatetags'] or args['updateonly']:
-    #     updated, skipped = update_tags(skipfiles, args)
+        failed, completed, time_taken = convert(
+                convfiles, args, logger, killer)
+        copied = copy_other_files(args)
+        print("")
+    if args['updatetags'] or args['updateonly']:
+        updated = update_tags(skipfiles, args, logger, killer)
+        print("")
 
     # Display end msg
-    print('Processed {} dirs, {} files in {:.2f} seconds.'.format(
-        fileops.count_dirs(args['indir']),
-        failed + completed + len(skipfiles), time_taken))
-    print('{} errors, {} skipped, {} converted.'.format(
-        failed, len(skipfiles), completed))
-    if args['copyexts']:
-        print('{} other files copied.'.format(copied))
+    if not args['updateonly']:
+        print('Processed {} dirs, {} files in {:.2f} seconds.'.format(
+            fileops.count_dirs(args['indir']),
+            failed + completed + len(skipfiles), time_taken))
+        print('{} errors, {} skipped, {} converted.'.format(
+            failed, len(skipfiles), completed))
+        if args['copyexts']:
+            print('{} other files copied.'.format(copied))
+
+    # Remove empty logs
+    logging.shutdown()
+    if os.stat('audio_conv.log').st_size == 0:
+        os.remove('audio_conv.log')
