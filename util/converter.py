@@ -3,30 +3,63 @@
 import os
 import subprocess
 import signal
+import shutil
+import tempfile
 
 
-class ConverterProcess:
+class MultiProcess:
+    def __init__(self, cmds):
+        self.cmds = cmds
+        self.next()
 
-    def __init__(self, cmd, inf, outf):
-        self.inf, self.outf = inf, outf
+    def next(self):
         self.process = subprocess.Popen(
-            cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
+            self.cmds.pop(0),
+            stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE)
 
     def kill(self):
         self.process.send_signal(signal.SIGINT)
         self.process.wait()
+
+    def poll(self):
+        status = self.process.poll()
+        if status == 0 and len(self.cmds) > 0:
+            self.next()
+            return None
+        return status
+
+    def log_error(self, logger):
+        logger.info('Failed on cmd: ' + self.process.args)
+        for l in self.process.stderr:
+            logger.info(l)
+
+
+class ConverterProcess(MultiProcess):
+
+    def __init__(self, cmds, inf, outf):
+        super().__init__(cmds)
+        self.inf, self.outf = inf, outf
+
+    def kill(self):
+        super().kill()
         # Remove uncompleted file
         if os.path.exists(self.outf):
             print('Removing:', self.outf)
             os.remove(self.outf)
 
-    def poll(self):
-        return self.process.poll()
 
-    def log_error(self, logger):
-        for l in self.process.stderr:
-            logger.info(l)
+class TagUpdaterProcess(MultiProcess):
+
+    def __init__(self, cmds, inf, outf, tmpf):
+        super().__init__(cmds)
+        self.inf, self.outf, self.tmpf = inf, outf, tmpf
+
+    def poll(self):
+        status = super().poll()
+        if status == 0:
+            shutil.copyfile(self.tmpf.name, self.outf)
+        return status
 
 
 class Converter:
@@ -56,8 +89,8 @@ class Converter:
                 self.processes.remove(proc)
         return ret
 
-    def add_process(self, inpath, outpath,
-                    print_actions=True, pretend=False):
+    def add_convert_process(self, inpath, outpath,
+                            print_actions=True, pretend=False):
         # Make new dir if needed
         if not os.path.exists(os.path.dirname(outpath)):
             if print_actions:
@@ -74,7 +107,25 @@ class Converter:
             cmd = ['ffmpeg', '-i', inpath, '-vn']
             cmd.extend(self.options)
             cmd.append(outpath)
-            self.processes.append(ConverterProcess(cmd, inpath, outpath))
+            self.processes.append(ConverterProcess([cmd], inpath, outpath))
+
+    def add_update_process(self, inpath, outpath,
+                           print_actions=True, pretend=False):
+        # Add new process to processes
+        if print_actions:
+            print('Updating tags:', outpath)
+        if pretend:
+            self.completed += 1
+        else:
+            temp = tempfile.NamedTemporaryFile(
+                    suffix=os.path.splitext(outpath)[1])
+            cmds = [['ffmpeg', '-i', inpath, '-aframes', '1',
+                     temp.name, '-y'],
+                    ['ffmpeg', '-i', temp.name, '-i', outpath, '-map', '1',
+                     '-c:a', 'copy', '-map_metadata:s:a', '0:s:a',
+                     temp.name, '-y']]
+            self.processes.append(TagUpdaterProcess(
+                cmds, inpath, outpath, temp))
 
     def log_errors(self, logger):
         for proc in self.failed_processes:
