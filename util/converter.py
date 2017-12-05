@@ -57,6 +57,7 @@ class TagUpdaterProcess(MultiProcess):
 
     def poll(self):
         status = super().poll()
+        # Once all commands have been completed copy temp file to out file
         if status == 0:
             shutil.copyfile(self.tmpf.name, self.outf)
         return status
@@ -104,6 +105,7 @@ class Converter:
         if pretend:
             self.completed += 1
         else:
+            # 1. Convert file, skipping any video data, using options
             cmd = ['ffmpeg', '-i', inpath, '-vn']
             cmd.extend(self.options)
             cmd.append(outpath)
@@ -119,6 +121,9 @@ class Converter:
         else:
             temp = tempfile.NamedTemporaryFile(
                     suffix=os.path.splitext(outpath)[1])
+            # 1. Convert tag information by converting one frame of audio
+            # 2. Copy the new tag info and old audio stream into temp file
+            # 3. TagUpdaterProcess will copy file internally
             cmds = [['ffmpeg', '-i', inpath, '-aframes', '1',
                      temp.name, '-y'],
                     ['ffmpeg', '-i', temp.name, '-i', outpath, '-map', '1',
