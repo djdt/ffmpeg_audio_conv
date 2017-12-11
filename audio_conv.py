@@ -103,7 +103,8 @@ def gather_files(args):
         t = os.path.splitext(t)[0] + os.extsep + args['outext']
         if os.path.exists(t):
             moddate = datetime.datetime.fromtimestamp(os.path.getmtime(f))
-            if moddate >= args['updatetags']:
+            if args['updatetags'] is not None and \
+                    moddate >= args['updatetags']:
                 updatefiles.append(f)
             else:
                 if args['verbose']:
