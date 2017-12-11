@@ -5,6 +5,7 @@ import os
 import shutil
 import sys
 import time
+import datetime
 
 from util import fileops
 from util.converter import Converter
@@ -54,8 +55,11 @@ def parse_args(args):
     parser.add_argument('-t', '--threads', type=int, default=4,
                         choices=range(1, 16),
                         help='Maximum number of threads used.')
-    parser.add_argument('-u', '--updatetags', action='store_true',
-                        help='Update the tags of existing files.')
+    parser.add_argument('-u', '--updatetags', nargs='?',
+                        const='',
+                        help='Update the tags of existing files, '
+                             'optionally modified after a certain date..'
+                             'Date format: %a %d %b %X %Z %Y.')
     parser.add_argument('-U', '--updateonly', action='store_true',
                         help='Only perform updating, not conversion..')
     parser.add_argument('-v', '--verbose', action='store_true',
@@ -67,6 +71,12 @@ def parse_args(args):
         parser.error("Input directory does not exist.")
     if args.bitrate is not None and args.quality is not None:
         parser.error("Cannot set both bitrate and quality options.")
+    if args.updatetags is not None:
+        if args.updatetags == '':
+            args.updatetags = datetime.datetime.min
+        else:
+            args.updatetags = datetime.datetime.strptime(
+                args.updatetags, "%a %d %b %X %Z %Y")
 
     return vars(args)
 
@@ -87,20 +97,24 @@ def gather_files(args):
     Returns non-mathced (for conversion) and matched (for updating).
     """
 
-    infiles, skipped = [], []
+    convfiles, updatefiles, skipfiles = [], [], []
     for f in fileops.search_exts(args['indir'], args['inexts']):
         t = fileops.convert_path(f, args['indir'], args['outdir'])
         t = os.path.splitext(t)[0] + os.extsep + args['outext']
         if os.path.exists(t):
-            if args['verbose']:
-                print('Skipping:', f)
-            skipped.append(f)
+            moddate = datetime.datetime.fromtimestamp(os.path.getmtime(f))
+            if moddate >= args['updatetags']:
+                updatefiles.append(f)
+            else:
+                if args['verbose']:
+                    print('Skipping:', f)
+                skipfiles.append(f)
         else:
-            infiles.append(f)
-    infiles.sort(reverse=True)  # Optimise for pop later
-    skipped.sort(reverse=True)  # Optimise for pop later
+            convfiles.append(f)
+    convfiles.sort(reverse=True)  # Optimise for pop later
+    updatefiles.sort(reverse=True)  # Optimise for pop later
 
-    return infiles, skipped
+    return convfiles, updatefiles, skipfiles
 
 
 def convert(infiles, args, logger, killer):
@@ -228,17 +242,16 @@ if __name__ == "__main__":
     logger = setup_logger()
     killer = CleanKiller()
 
-    convfiles, skipfiles = gather_files(args)
-    num_files = len(convfiles) + len(skipfiles)
+    convfiles, updatefiles, skipfiles = gather_files(args)
+    num_files = len(convfiles) + len(updatefiles) + len(skipfiles)
     convert_time, update_time = 0.0, 0.0
     if not args['updateonly']:
         failed, completed, convert_time = convert(convfiles, args,
                                                   logger, killer)
         copied = copy_other_files(args)
         print("")
-    if args['updatetags'] or args['updateonly']:
-        updated, update_time = update_tags(skipfiles, args, logger, killer)
-        print("")
+    updated, update_time = update_tags(updatefiles, args, logger, killer)
+    print("")
 
     # Display end msg
     print('Processed {} dirs, {} files in {:.2f} seconds.'.format(
@@ -249,8 +262,9 @@ if __name__ == "__main__":
             failed, num_files - (failed + completed), completed))
         if args['copyexts']:
             print('Copy: {} other files copied.'.format(copied))
-    if args['updatetags'] or args['updateonly']:
-        print('Update: Updated tags in {} files.'.format(updated, update_time))
+    if len(updatefiles) > 0:
+        print('Update: Updated tags in {} files, skipped {} files.'.format(
+            updated, skipfiles))
 
     # Remove empty logs
     logging.shutdown()
