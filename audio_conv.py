@@ -263,7 +263,7 @@ if __name__ == "__main__":
             failed, num_files - (failed + completed), completed))
         if args['copyexts']:
             print('Copy: {} other files copied.'.format(copied))
-    if len(updatefiles) > 0:
+    if updated > 0:
         print('Update: Updated tags in {} files, skipped {} files.'.format(
             updated, skipfiles))
 
