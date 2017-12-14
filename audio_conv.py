@@ -265,7 +265,7 @@ if __name__ == "__main__":
             print('Copy: {} other files copied.'.format(copied))
     if updated > 0:
         print('Update: Updated tags in {} files, skipped {} files.'.format(
-            updated, skipfiles))
+            updated, len(skipfiles)))
 
     # Remove empty logs
     logging.shutdown()
