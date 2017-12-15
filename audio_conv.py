@@ -13,12 +13,21 @@ from util.cleankiller import CleanKiller
 
 
 def time_remaining(completed, remaining, elapsed_time):
+    """
+    Returns the time estimated given the number of completed items,
+    remaining items and the time elasped so far.
+    Pass in total sizes of files for more accurate estimation.
+    """
     if completed == 0:
         return 0
     return (remaining * (elapsed_time / float(completed)))
 
 
 def display_progress(count, total, remaining_time):
+    """
+    Displays a progress bar and and print the remaining time.
+    Moves the cursor up a line afterwards.
+    """
     bar_len = 32
     filled = int(round(bar_len * count) / float(total))
     bar = '[' + '#' * filled + ' ' * (bar_len - filled) + ']'
@@ -94,9 +103,8 @@ def setup_logger():
 def gather_files(args):
     """
     Searches directories for matching files.
-    Returns non-mathced (for conversion) and matched (for updating).
+    Returns the files for converting, updating and skipping.
     """
-
     convfiles, updatefiles, skipfiles = [], [], []
     for f in fileops.search_exts(args['indir'], args['inexts']):
         t = fileops.convert_path(f, args['indir'], args['outdir'])
@@ -121,9 +129,9 @@ def gather_files(args):
 def convert(infiles, args, logger, killer):
     """
     Takes input files for conversion.
-    Returns the number of failed, completed and copied files and the time.
+    Returns the number of failed, completed and copied files,
+    and the time taken to convert.
     """
-
     if args['quality'] is not None:
         options = ['-q:a', args['quality']]
     elif args['bitrate'] is not None:
@@ -175,7 +183,8 @@ def convert(infiles, args, logger, killer):
 
 def update_tags(infiles, args, logger, killer):
     """
-    Updates tags interactively.
+    Updates the tags of infiles.
+    Returns the number of successful updates and the time taken.
     """
 
     converter = Converter(threads=args['threads'])
@@ -221,6 +230,10 @@ def update_tags(infiles, args, logger, killer):
 
 
 def copy_other_files(args):
+    """
+    Copies files from the input ot output directory,
+    preserving directory structures.
+    """
     copied = 0
     if not args['nocopyexts']:
         copy_files = fileops.search_exts(args['indir'], args['copyexts'])
