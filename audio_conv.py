@@ -6,6 +6,7 @@ import shutil
 import sys
 import time
 import datetime
+from dateutil import parser as dateparse
 
 from util import fileops
 from util.converter import Converter
@@ -68,7 +69,7 @@ def parse_args(args):
                         const='',
                         help='Update the tags of existing files, '
                              'optionally modified after a certain date..'
-                             'Date format: %a %d %b %X %Z %Y.')
+                             'Dates should be formatted as per ISO8601.')
     parser.add_argument('-U', '--updateonly', action='store_true',
                         help='Only perform updating, not conversion..')
     parser.add_argument('-v', '--verbose', action='store_true',
@@ -84,8 +85,7 @@ def parse_args(args):
         if args.updatetags == '':
             args.updatetags = datetime.datetime.min
         else:
-            args.updatetags = datetime.datetime.strptime(
-                args.updatetags, "%a %d %b %X %Z %Y")
+            args.updatetags = dateparse.parse(args.updatetags)
 
     return vars(args)
 
@@ -276,9 +276,9 @@ if __name__ == "__main__":
             failed, num_files - (failed + completed), completed))
         if args['copyexts']:
             print('Copy: {} other files copied.'.format(copied))
-    if len(updatefiles) > 0:
+    if updated > 0:
         print('Update: Updated tags in {} files, skipped {} files.'.format(
-            updated, skipfiles))
+            updated, len(skipfiles)))
 
     # Remove empty logs
     logging.shutdown()

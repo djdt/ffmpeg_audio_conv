@@ -30,7 +30,7 @@ class MultiProcess:
         return status
 
     def log_error(self, logger):
-        logger.info('Failed on cmd: ' + self.process.args)
+        logger.info('Failed on cmd: ' + str(self.process.args))
         for l in self.process.stderr:
             logger.info(l)
 
@@ -127,7 +127,7 @@ class Converter:
             cmds = [['ffmpeg', '-i', inpath, '-aframes', '1',
                      temp.name, '-y'],
                     ['ffmpeg', '-i', temp.name, '-i', outpath, '-map', '1',
-                     '-c:a', 'copy', '-map_metadata:s:a', '0:s:a',
+                     '-vn', '-c:a', 'copy', '-map_metadata:s:a', '0:s:a',
                      temp.name, '-y']]
             self.processes.append(TagUpdaterProcess(
                 cmds, inpath, outpath, temp))
