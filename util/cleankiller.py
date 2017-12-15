@@ -2,6 +2,10 @@ import signal
 
 
 class CleanKiller:
+    """
+    Catches termination and interrupt signals to allow for cleanup
+    of the program on termination.
+    """
     kill_now = False
 
     def __init__(self):
