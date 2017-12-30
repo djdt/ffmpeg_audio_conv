@@ -14,8 +14,7 @@ from util.cleankiller import CleanKiller
 
 
 def time_remaining(completed, remaining, elapsed_time):
-    """
-    Returns the time estimated given the number of completed items,
+    """Returns the time estimated given the number of completed items,
     remaining items and the time elasped so far.
     Pass in total sizes of files for more accurate estimation.
     """
@@ -25,8 +24,7 @@ def time_remaining(completed, remaining, elapsed_time):
 
 
 def display_progress(count, total, remaining_time):
-    """
-    Displays a progress bar and and print the remaining time.
+    """Displays a progress bar and and print the remaining time.
     Moves the cursor up a line afterwards.
     """
     bar_len = 32
@@ -101,8 +99,7 @@ def setup_logger():
 
 
 def gather_files(args):
-    """
-    Searches directories for matching files.
+    """Searches directories for matching files.
     Returns the files for converting, updating and skipping.
     """
     convfiles, updatefiles, skipfiles = [], [], []
@@ -127,8 +124,7 @@ def gather_files(args):
 
 
 def convert(infiles, args, logger, killer):
-    """
-    Takes input files for conversion.
+    """Takes input files for conversion.
     Returns the number of failed, completed and copied files,
     and the time taken to convert.
     """
@@ -182,8 +178,7 @@ def convert(infiles, args, logger, killer):
 
 
 def update_tags(infiles, args, logger, killer):
-    """
-    Updates the tags of infiles.
+    """Updates the tags of infiles.
     Returns the number of successful updates and the time taken.
     """
 
@@ -230,8 +225,7 @@ def update_tags(infiles, args, logger, killer):
 
 
 def copy_other_files(args):
-    """
-    Copies files from the input ot output directory,
+    """Copies files from the input ot output directory,
     preserving directory structures.
     """
     copied = 0
