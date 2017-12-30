@@ -8,6 +8,9 @@ import tempfile
 
 
 class MultiProcess:
+    """Takes a list of commands and executes them in order.
+    Polling the process provides the status of the current process and
+    moves to the next process if the current completed suceesfully."""
     def __init__(self, cmds):
         self.cmds = cmds
         self.next()
@@ -61,6 +64,13 @@ class TagUpdaterProcess(MultiProcess):
         if status == 0:
             shutil.copyfile(self.tmpf.name, self.outf)
         return status
+
+    def kill(self):
+        super().kill()
+        # Remove uncompleted file
+        if os.path.exists(self.outf):
+            print('Removing:', self.outf)
+            os.remove(self.outf)
 
 
 class Converter:
