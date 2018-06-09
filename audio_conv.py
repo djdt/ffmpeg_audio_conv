@@ -61,7 +61,6 @@ def parse_args(args):
     parser.add_argument('-q', '--quality', type=str,
                         help='Quality to pass to ffmpeg.')
     parser.add_argument('-t', '--threads', type=int, default=4,
-                        choices=range(1, 16),
                         help='Maximum number of threads used.')
     parser.add_argument('-u', '--updatetags', nargs='?',
                         const='',
