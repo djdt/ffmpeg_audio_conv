@@ -246,7 +246,7 @@ def copy_other_files(args):
 
             # Need to check if converted image exists
             if args['convertimages'] is not None and is_image:
-                new_f = os.path.splitext(f)[0] + os.extsep + args['convertimages']
+                new_f = os.path.splitext(new_f)[0] + os.extsep + args['convertimages']
 
             if os.path.exists(new_f):
                 if args['verbose']:
