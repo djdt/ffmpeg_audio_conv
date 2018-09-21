@@ -42,33 +42,41 @@ def parse_args(args):
             description='Converts audio files using ffmpeg,'
                         ' preserves dir structure.',
             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    # Positional
     parser.add_argument('indir', help='Input directory.')
     parser.add_argument('outdir', help='Output directory.')
-    parser.add_argument('-b', '--bitrate', type=str,
-                        help='Target bitrate, e.g. 320k.')
-    parser.add_argument('-c', '--copyexts', type=str, nargs='+',
-                        default=['jpg', 'jpeg', 'png', 'gif', 'log', 'cue'],
-                        help='Copy other files (e.g. images) to new dir.')
-    parser.add_argument('-C', '--nocopyexts', action='store_true',
-                        help='Prevent copying of other files.')
+    # Files
     parser.add_argument('-i', '--inexts', type=str, nargs='+',
                         default=['flac', 'alac', 'wav'],
                         help='File types to convert.')
     parser.add_argument('-o', '--outext', type=str, required=True,
                         help='Target file type for conversion.')
-    parser.add_argument('-p', '--pretend', action='store_true',
-                        help='Perform no actions.')
+    # FFMEPG settings
+    parser.add_argument('-b', '--bitrate', type=str,
+                        help='Target bitrate, e.g. 320k.')
     parser.add_argument('-q', '--quality', type=str,
                         help='Quality to pass to ffmpeg.')
-    parser.add_argument('-t', '--threads', type=int, default=4,
-                        help='Maximum number of threads used.')
-    parser.add_argument('-u', '--updatetags', nargs='?',
+    # Other files
+    parser.add_argument('--copyexts', type=str, nargs='+',
+                        default=['jpg', 'jpeg', 'png', 'gif', 'log', 'cue'],
+                        help='Copy other files (e.g. images) to new dir.')
+    parser.add_argument('-C', '--nocopyexts', action='store_true',
+                        help='Prevent copying of other files.')
+    parser.add_argument('--convertimages', type=str, metavar='EXT',
+                        help='Convert images to a new format.')
+    # Tags
+    parser.add_argument('--updatetags', nargs='?',
                         const='',
                         help='Update the tags of existing files, '
-                             'optionally modified after a certain date..'
+                             'optionally modified after a certain date.'
                              'Dates should be formatted as per ISO8601.')
     parser.add_argument('-U', '--updateonly', action='store_true',
-                        help='Only perform updating, not conversion..')
+                        help='Only perform updating, not conversion.')
+    # Converter settings
+    parser.add_argument('-p', '--pretend', action='store_true',
+                        help='Perform no actions.')
+    parser.add_argument('-t', '--threads', type=int, default=4,
+                        help='Maximum number of threads used.')
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='Increase output.')
 
