@@ -8,7 +8,7 @@ import time
 import datetime
 from dateutil import parser as dateparse
 
-from util import fileops
+from util import fileops, imageops
 from util.converter import Converter
 from util.cleankiller import CleanKiller
 
@@ -91,6 +91,8 @@ def parse_args(args):
             args.updatetags = datetime.datetime.min
         else:
             args.updatetags = dateparse.parse(args.updatetags)
+    if args.convertimages is not None:
+        args.convertimages = args.convertimages.lstrip('.')
 
     return vars(args)
 
@@ -239,10 +241,21 @@ def copy_other_files(args):
     if not args['nocopyexts']:
         copy_files = fileops.search_exts(args['indir'], args['copyexts'])
         for f in copy_files:
+            is_image = imageops.is_image(f)
             new_f = fileops.convert_path(f, args['indir'], args['outdir'])
+
+            # Need to check if converted image exists
+            if args['convertimages'] is not None and is_image:
+                new_f = os.path.splitext(f)[0] + os.extsep + args['convertimages']
+
             if os.path.exists(new_f):
                 if args['verbose']:
                     print('Skipping other:', f)
+            elif args['convertimages'] is not None and is_image:
+                print('Converting image:', f)
+                if not args['pretend']:
+                    imageops.convert_image(f, new_f)
+                    copied += 1
             else:
                 print('Copying other:', f)
                 if not args['pretend']:
